@@ -10,7 +10,17 @@ export const UserStateSchema = z.object({
   budget: z.number().min(1).max(30),
   time: z.enum(['under10', 'around15', 'over15']),
   diet: z.enum(['none', 'vegetarian', 'vegan', 'pescatarian']),
-  allergies: z.array(z.enum(['gluten-free', 'dairy-free', 'peanut-free', 'pork-free'])).max(4).default([]),
+  allergies: z.array(z.enum([
+    'gluten', 'lactose', 'crustaces', 'oeufs', 'poissons', 'soja', 
+    'arachides', 'fruits_coque', 'celeri', 'moutarde', 'mollusques', 'sesame'
+  ])).max(12).default([]),
+  customAllergies: z.array(z.string()).max(15).default([]),
+  lovedIngredients: z.array(z.string()).max(25).default([]),
+  dislikedIngredients: z.array(z.string()).max(25).default([]),
+  equipment: z.array(z.string()).default([]),
+  
+  // 👇 AJOUTE CECI ICI
+  mealsCount: z.number().int().min(1).max(14).default(7),
 });
 
 export const HintSchema = z.string().trim().max(200).optional();

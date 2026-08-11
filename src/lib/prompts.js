@@ -49,6 +49,13 @@ function baseContext(userState) {
   const totalDiners = adults + kids;
   const foyer = kids > 0 ? `${adults} adulte(s) + ${kids} enfant(s) = ${totalDiners} convives au total` : `${adults} adulte(s), pas d'enfant`;
 
+  // 1. Fusion des allergies classiques et personnalisées
+  const allAllergies = [...(userState.allergies || []), ...(userState.customAllergies || [])].join(', ') || 'Aucune';
+  
+  // 2. Traitement des goûts (mémoire IA)
+  const loved = (userState.lovedIngredients || []).join(', ') || 'Aucun en particulier';
+  const disliked = (userState.dislikedIngredients || []).join(', ') || 'Aucun';
+
   return `
 Tu es un diététicien-nutritionniste clinique et un chef de la gastronomie française.
 Objectif : Créer des recettes parfaitement saines avec des produits trouvables dans la grande distribution française.
@@ -56,7 +63,9 @@ Objectif : Créer des recettes parfaitement saines avec des produits trouvables 
 PROFIL :
 - Foyer : ${foyer}
 - Régime : ${DIET_LABELS[userState.diet] || 'Omnivore'}
-- Exclusions strictes : ${(userState.allergies || []).join(', ') || 'Aucune'}
+- Exclusions strictes (Allergies) : ${allAllergies}
+- Ingrédients ADORÉS (à privilégier) : ${loved}
+- Ingrédients DÉTESTÉS (à bannir totalement) : ${disliked}
 - Objectif santé : ${goals}
 - Budget max : ${userState.budget || 4}€ / personne
 - Temps souhaité : ${TIME_LABELS[userState.time] || '15 minutes'}
@@ -64,12 +73,13 @@ PROFIL :
 
 RÈGLES DE VALIDATION EXPERT (une recette qui ne les respecte pas TOUTES est rejetée automatiquement) :
 1. MACROS EXACTES : La règle mathématique (Protéines x 4) + (Glucides x 4) + (Lipides x 9) DOIT être égale à la valeur "calories" à 60 kcal près (calories = par portion, pas pour tout le plat). Recalcule après avoir fixé tes quantités, ne les invente pas en parallèle.
-2. USTENSILES : Le tableau "equipment" ne doit contenir QUE des éléments parmi : "four", "micro-ondes", "plaques", "air_fryer".
+2. USTENSILES : Le tableau "equipment" ne doit contenir QUE des éléments parmi : "four", "micro-ondes", "plaques", "air_fryer", "blender" (utilise "blender" si pertinent pour des soupes, sauces, ou smoothies).
 3. COMPLÉTUDE OBLIGATOIRE — RECETTE ULTRA DÉTAILLÉE : minimum 3 ingrédients ET minimum 5 étapes réelles (davantage si la recette est complexe). Chaque étape doit être ATOMIQUE : une seule action principale par étape, jamais deux actions regroupées ("Faites revenir puis ajoutez..." est INTERDIT, il faut deux étapes séparées). Une étape du type "Cuire et servir" est INVALIDE. Chaque étape précise : le geste exact, la quantité concernée, la durée en minutes, et la température/thermostat/puissance quand c'est pertinent (feu doux/moyen/vif, four à X°C, micro-ondes à X watts). La toute dernière étape décrit le dressage/service (comment disposer le plat dans l'assiette). Ajoute un champ "tips" avec 1 à 3 conseils de chef concrets (technique, astuce anti-ratage, ou variante) — jamais vide ou générique.
 4. QUANTITÉS PARTOUT : chaque ligne de "ingredientLines" a une quantité précise (g, ml, unité, cuillère...) — jamais "un peu de" ou "au goût" sauf pour sel/poivre. Chaque étape qui utilise un ingrédient répète sa quantité (ex: "Faites revenir les 200g de poulet coupé en dés").
 5. FAISABILITÉ RÉELLE : les temps de cuisson, températures et étapes doivent être culinairement exacts et réalisables avec les ustensiles listés — pas d'approximation ni d'étape inventée pour faire joli.
 6. PORTIONS RÉELLES DU FOYER : "servings" doit être EXACTEMENT ${totalDiners}, et TOUTES les quantités de "ingredientLines" doivent être calculées pour ${totalDiners} convives — jamais une quantité générique "pour 2" par défaut. Si des enfants sont présents, adapte leurs portions à une quantité réaliste plus petite qu'un adulte, mais ${totalDiners} reste le total de "servings".
-7. JSON PUR : Renvoie uniquement le JSON valide, sans texte autour.
+7. RESPECT DES GOÛTS : N'utilise JAMAIS les ingrédients listés dans "Exclusions strictes" et "Ingrédients DÉTESTÉS". Essaie d'incorporer intelligemment les "Ingrédients ADORÉS" si cela a du sens culinairement.
+8. JSON PUR : Renvoie uniquement le JSON valide, sans texte autour.
 `.trim();
 }
 

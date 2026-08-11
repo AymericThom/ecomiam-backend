@@ -24,6 +24,21 @@ fridgeRouter.post('/', async (req, res) => {
     // cohérent avec le reste (jamais confiance en un flag côté client).
     const priority = await isPremiumRequest(req);
 
+    // 🔧 Correction d'une vraie faille : `priority` n'était utilisé QUE pour
+    // la priorité dans la file Gemini, pas pour bloquer l'accès — un
+    // utilisateur non-PRO (ou un statut isPremium patché localement en
+    // AsyncStorage) pouvait scanner le frigo sans limite jusqu'au quota
+    // journalier générique, alors que c'est explicitement une fonctionnalité
+    // PRO (vision + génération d'image à chaque appel, le scan le plus
+    // coûteux de l'app). On bloque maintenant ici, côté serveur, à partir du
+    // même `is_pro` vérifié en base — pas du flag client.
+    if (!priority) {
+      return res.status(403).json({
+        error: 'Le scan de frigo est réservé aux abonnés PRO.',
+        code: 'PRO_REQUIRED',
+      });
+    }
+
     if (!imageBase64 || typeof imageBase64 !== 'string') {
       return res.status(400).json({ error: 'imageBase64 manquant' });
     }

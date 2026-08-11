@@ -6,6 +6,7 @@ import { attachGeneratedImages, generateRecipeImage } from '../lib/imageGen.js';
 import { estimateRecipePricePerServing } from '../lib/priceEstimator.js';
 import { pickFromBank, saveToBank, violatesAllergies } from '../lib/recipeBank.js';
 import { isPremiumRequest } from '../lib/premiumCheck.js';
+import { checkFreeSwapQuota } from '../middleware/checkFreeSwapQuota.js';
 
 export const recipesRouter = Router();
 
@@ -41,21 +42,23 @@ recipesRouter.post('/week', async (req, res) => {
     const userState = UserStateSchema.parse(req.body.userState);
     const priority = await isPremiumRequest(req);
 
-    const fromBank = await pickFromBank(userState, 7);
-    const missing = 7 - fromBank.length;
+    // 👇 1. On récupère le nombre cible depuis userState (ou 7 par défaut)
+    const targetCount = userState.mealsCount || 7;
+
+    // 👇 2. On utilise 'targetCount' au lieu de '7' en dur
+    const fromBank = await pickFromBank(userState, targetCount);
+    const missing = targetCount - fromBank.length;
 
     let generated = [];
     if (missing > 0) {
+      // Le paramètre 'missing' transmet le nombre à générer à buildWeekPrompt
       const { system, user } = buildWeekPrompt(userState, missing);
       const parsed = await generateValidatedJSON({ system, user, schema: WeekResponseSchema(missing, userState), priority, expectedRecipeCount: missing });
       const safeDays = dropUnsafe(parsed.days, userState.allergies);
       generated = (await attachGeneratedImages(safeDays, { priority })).map(attachPrice);
-      generated.forEach((r) => saveToBank(r, userState)); // async, pas bloquant
+      generated.forEach((r) => saveToBank(r, userState));
     }
 
-    // On peut renvoyer moins de 7 jours si une/des recette(s) a/ont été
-    // écartée(s) pour allergène — c'est un compromis volontaire : mieux vaut
-    // un menu incomplet qu'un menu avec un allergène caché dedans.
     const days = [...fromBank, ...generated];
     res.json({ days });
   } catch (err) {
@@ -67,7 +70,10 @@ recipesRouter.post('/week', async (req, res) => {
 });
 
 // POST /api/recipes/swap  { userState, excludeLabels: string[] }
-recipesRouter.post('/swap', async (req, res) => {
+// 🔧 checkFreeSwapQuota (voir middleware) : avant, seule la limite
+// FREE_SWAPS_PER_WEEK côté client empêchait les swaps illimités en gratuit —
+// contournable en éditant AsyncStorage. Vérifiée en base maintenant.
+recipesRouter.post('/swap', checkFreeSwapQuota, async (req, res) => {
   try {
     const userState = UserStateSchema.parse(req.body.userState);
     const excludeLabels = ExcludeLabelsSchema.parse(req.body.excludeLabels) || [];
