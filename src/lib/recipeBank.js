@@ -17,11 +17,44 @@ function currentSeasonFR() {
   return 'automne';
 }
 
+// ⚡ CORRIGÉ + ÉTENDU : les clés ci-dessous doivent correspondre aux
+// identifiants réellement utilisés par l'appli (voir Step5Allergies dans
+// AppUI.js : "gluten", "lactose", "crustaces", "oeufs", "poissons", "soja",
+// "arachides", "fruits_coque", "celeri", "moutarde", "mollusques",
+// "sesame"). Les anciennes clés ("gluten-free", "dairy-free",
+// "peanut-free", "pork-free") ne correspondaient à AUCUN de ces
+// identifiants : ce filet de sécurité ne se déclenchait donc en réalité
+// JAMAIS, quelle que soit l'allergie choisie par l'utilisateur — le prompt
+// envoyé à l'IA était la SEULE protection, sans aucune double vérification
+// derrière. Cette liste était aussi beaucoup trop courte (quelques mots par
+// catégorie) : elle est maintenant nettement plus complète, avec les noms
+// courants, dérivés et plats qui contiennent typiquement chaque allergène.
 const ALLERGY_KEYWORDS = {
-  'gluten-free': /pâtes|farine|pain|blé|semoule|couscous/i,
-  'dairy-free': /lait|fromage|crème|beurre|yaourt/i,
-  'peanut-free': /cacahuète|arachide/i,
-  'pork-free': /porc|lardons|jambon|bacon|saucisse/i,
+  gluten:
+    /\bbl[ée]\b|froment|farine(?! de riz| de ma[iï]s| de sarrasin| de sarazin| sans gluten)|\bpain\b|panure|chapelure|p[âa]tes?\b|spaghetti|macaroni|tagliatelle|lasagne|gnocchi|semoule|couscous|boulgour|orge|seigle|avoine(?! sans gluten)|[ée]peautre|kamut|seitan|pizza|brioche|croissant|viennoiserie|biscuit|g[âa]teau|crêpe|gaufre|roux\b|b[ée]chamel|bouillon[- ]cube|chapon|biscotte|cracker|pâte feuilletée|pâte brisée|pâte à tarte|beignet|pané|panée|malt|bière(?! sans gluten)/i,
+  lactose:
+    /\blait\b(?! de coco| de soja| d'amande| d'avoine| de riz)|cr[èe]me\s*(fra[îi]che|liquide|épaisse|fleurette|entière)?|fromage|comt[ée]|emmental|mozzarella|parmesan|ch[èe]vre|feta|ricotta|mascarpone|gruy[èe]re|cheddar|\bbrie\b|camembert|beurre(?! de cacahuète| d'arachide)|yaourt|yogourt|fromage blanc|petit[- ]suisse|lactos[ée]rum|babeurre|ghee|lait concentr[ée]|lait en poudre|chantilly|raclette|tomme|reblochon|roquefort|b[ée]chamel|gratin[ée]/i,
+  crustaces:
+    /crevette|gambas|langoustine|\bcrabe\b|homard|langouste|[ée]crevisse|tourteau|bisque|d[ée]capode/i,
+  oeufs:
+    /\bœuf|\boeuf|mayonnaise|a[iï]oli|meringue|omelette|quiche|p[âa]te à choux|g[ée]noise|\bflan\b|cr[èe]me anglaise|cr[èe]me p[âa]tissi[èe]re|pân[ée]|panure(?=.*œuf)|p[âa]tes fra[îi]ches|brioche/i,
+  poissons:
+    /poisson|saumon|\bthon\b|cabillaud|colin|merlu|\bsole\b|truite|sardine|maquereau|anchois|morue|hareng|tarama|nuoc[- ]m[âa]m|bouillabaisse|fumet de poisson|worcestershire|surimi|[ée]glefin|dorade|bar\b|lieu noir|raie\b/i,
+  soja:
+    /\bsoja\b|\btofu\b|edamame|tempeh|sauce soja|shoyu|tamari|\bmiso\b|l[ée]cithine de soja|prot[ée]ines? de soja|tonyu|lait de soja/i,
+  arachides:
+    /cacahu[èe]te|arachide|beurre de cacahu[èe]te|huile d'arachide|satay/i,
+  fruits_coque:
+    /amande|noisette|noix(?! de coco| de muscade)|noix de caj?ou|noix de p[ée]can|noix de macadamia|noix du br[ée]sil|pistache|pralin[ée]?|nutella|marzipan|massepain/i,
+  celeri: /c[ée]leri([- ]rave| branche)?|sel de c[ée]leri/i,
+  moutarde: /moutarde/i,
+  mollusques:
+    /\bmoules?\b|hu[îi]tres?|coquilles? saint[- ]jacques|calamars?|encornets?|poulpe|\bseiches?\b|bulots?|escargots?|palourdes?|praires?|bigorneaux?/i,
+  sesame: /s[ée]same|tahin[ée]?|houmous|hummus/i,
+  // Catégories historiques (peu de personnes cochent "sans porc" comme
+  // allergie à proprement parler, mais on la garde par compatibilité avec
+  // d'éventuelles données existantes qui utiliseraient encore cette clé).
+  'pork-free': /\bporc\b|lardons?|jambon|bacon|saucisse|chorizo|charcuterie/i,
 };
 
 // Exportée : réutilisée aussi pour vérifier les recettes FRAÎCHEMENT

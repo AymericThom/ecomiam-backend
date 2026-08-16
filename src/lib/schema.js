@@ -48,6 +48,12 @@ export const RecipeSchema = z.object({
   // Conseils de chef — nouveau champ, optionnel côté schéma pour ne jamais
   // faire échouer une génération si le modèle l'omet, mais demandé par le prompt.
   tips: z.array(z.string().min(4)).max(3).default([]),
+  // ⚡ NOUVEAU : signale qu'un ingrédient "détesté" par l'utilisateur a quand
+  // même été utilisé faute d'alternative crédible (voir la règle 7 du
+  // prompt) — optionnels avec valeurs par défaut pour ne jamais faire
+  // échouer une génération si le modèle les omet.
+  usedDislikedIngredient: z.boolean().default(false),
+  dislikedIngredientNote: z.string().max(300).default(''),
 })
   // Les macros doivent être mathématiquement cohérentes avec les calories
   // annoncées — le prompt le demande déjà, mais rien ne le VÉRIFIAIT. Sans
