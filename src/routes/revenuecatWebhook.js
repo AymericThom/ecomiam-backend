@@ -1,6 +1,18 @@
 import { Router } from 'express';
 import { supabaseAdmin } from '../lib/supabaseAdmin.js';
 
+// ⚠️ MIGRATION SQL REQUISE (à exécuter une fois dans Supabase > SQL Editor)
+// avant que les 3 nouvelles colonnes ci-dessous fonctionnent :
+//
+//   ALTER TABLE profiles
+//     ADD COLUMN IF NOT EXISTS subscription_expires_at timestamptz,
+//     ADD COLUMN IF NOT EXISTS is_trial boolean DEFAULT false,
+//     ADD COLUMN IF NOT EXISTS reminder_2d_sent_at timestamptz;
+//
+// Sans cette migration, les appels .update() ci-dessous échoueront
+// silencieusement pour ces champs (Supabase ignore les colonnes inconnues
+// par défaut) — is_pro continuera de fonctionner normalement dans tous les cas.
+
 export const revenuecatWebhookRouter = Router();
 
 // RevenueCat > Project Settings > Integrations > Webhooks
@@ -44,18 +56,50 @@ revenuecatWebhookRouter.post('/', async (req, res) => {
     const userId = event.app_user_id;
     const type = event.type;
 
+    // ⚡ NOUVEAU : on garde la date de fin d'entitlement + si c'est encore
+    // la période d'essai — utilisé par lib/subscriptionReminders.js pour
+    // savoir à qui envoyer le rappel email "2 jours avant" (voir aussi les
+    // rappels notification côté mobile, scheduleTrialEndReminders /
+    // scheduleRenewalReminder dans notifications.js, qui couvrent le même
+    // besoin mais uniquement pendant que l'app est/a été ouverte récemment
+    // — le rappel email couvre aussi le cas où l'app n'est pas relancée).
+    const expiresAt = event.expiration_at_ms
+      ? new Date(event.expiration_at_ms).toISOString()
+      : null;
+    const isTrial = event.period_type === 'TRIAL' || event.period_type === 'INTRO';
+
     if (supabaseAdmin && userId) {
       if (ACTIVE_EVENTS.has(type)) {
-        await supabaseAdmin.from('profiles').update({ is_pro: true }).eq('id', userId);
+        await supabaseAdmin
+          .from('profiles')
+          .update({
+            is_pro: true,
+            subscription_expires_at: expiresAt,
+            is_trial: isTrial,
+            // Nouveau cycle (achat/renouvellement) → on réautorise l'envoi
+            // du rappel "2 jours avant" pour CETTE échéance-là.
+            reminder_2d_sent_at: null,
+          })
+          .eq('id', userId);
       } else if (INACTIVE_EVENTS.has(type)) {
-        await supabaseAdmin.from('profiles').update({ is_pro: false }).eq('id', userId);
+        await supabaseAdmin
+          .from('profiles')
+          .update({
+            is_pro: false,
+            subscription_expires_at: null,
+            is_trial: false,
+          })
+          .eq('id', userId);
       } else if (type === 'TRANSFER') {
         // Un transfert déplace l'entitlement vers ce app_user_id — on lui
         // accorde le PRO ici. On ne peut pas révoquer le compte source à
         // partir de ce seul payload (RevenueCat ne l'envoie pas), donc si tu
         // constates des comptes PRO orphelins après transfert, c'est là qu'il
         // faut creuser en premier.
-        await supabaseAdmin.from('profiles').update({ is_pro: true }).eq('id', userId);
+        await supabaseAdmin
+          .from('profiles')
+          .update({ is_pro: true, subscription_expires_at: expiresAt, is_trial: isTrial })
+          .eq('id', userId);
       } else if (!INFORMATIONAL_EVENTS.has(type)) {
         console.warn(`[webhooks/revenuecat] type d'événement non géré : ${type}`);
       }

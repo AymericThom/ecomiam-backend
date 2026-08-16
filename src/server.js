@@ -10,11 +10,17 @@ import { recipesRouter } from './routes/recipes.js';
 import { fridgeRouter } from './routes/fridge.js';
 import { cartRouter } from './routes/cart.js';
 import { accountRouter } from './routes/account.js';
+import { contactRouter } from './routes/contact.js';
 import { revenuecatWebhookRouter } from './routes/revenuecatWebhook.js';
 import { riscEventsRouter } from './routes/riscEvents.js';
+import { referralRouter } from './routes/referral.js';
+import { streakRouter } from './routes/streak.js';
+import { pushRouter } from './routes/push.js';
 import { identifyRequester } from './middleware/requireAuth.js';
 import { checkDailyQuota } from './middleware/checkDailyQuota.js';
 import { ensureRecipeImageBucket } from './lib/imageGen.js';
+import { startSubscriptionReminderJob } from './lib/subscriptionReminders.js';
+import { startRetentionJobs } from './lib/retentionJobs.js';
 
 // --- Garde-fou au démarrage : on préfère planter tout de suite en prod
 // plutôt que de tourner silencieusement sans clé Gemini et facturer des
@@ -47,6 +53,15 @@ app.use(express.json({ limit: '8mb' }));
 const aiLimiter = rateLimit({ windowMs: 15 * 60 * 1000, max: 60, standardHeaders: true, legacyHeaders: false });
 const cartLimiter = rateLimit({ windowMs: 15 * 60 * 1000, max: 120 });
 const accountLimiter = rateLimit({ windowMs: 60 * 60 * 1000, max: 5 }); // suppression de compte : rare, pas besoin de plus
+// ⚡ NOUVEAU : formulaire de contact (suggestion/remboursement/bug) —
+// généreux mais borné, pour laisser réessayer en cas d'erreur réseau sans
+// ouvrir la porte au spam d'emails vers la boîte support.
+const contactLimiter = rateLimit({ windowMs: 60 * 60 * 1000, max: 8 });
+// ⚡ NOUVEAU : parrainage (lecture/validation de code, rare par nature) et
+// streak (lecture seule, peut être appelée souvent à l'ouverture de l'app).
+const referralLimiter = rateLimit({ windowMs: 60 * 60 * 1000, max: 20 });
+const streakLimiter = rateLimit({ windowMs: 15 * 60 * 1000, max: 60 });
+const pushLimiter = rateLimit({ windowMs: 60 * 60 * 1000, max: 10 });
 
 app.get('/health', (_req, res) => res.json({ ok: true, uptime: process.uptime() }));
 
@@ -54,6 +69,10 @@ app.use('/api/recipes', aiLimiter, identifyRequester, checkDailyQuota, recipesRo
 app.use('/api/fridge-scan', aiLimiter, identifyRequester, checkDailyQuota, fridgeRouter);
 app.use('/api/cart', cartLimiter, identifyRequester, cartRouter);
 app.use('/api/account', accountLimiter, identifyRequester, accountRouter);
+app.use('/api/contact', contactLimiter, identifyRequester, contactRouter);
+app.use('/api/referral', referralLimiter, identifyRequester, referralRouter);
+app.use('/api/streak', streakLimiter, identifyRequester, streakRouter);
+app.use('/api/push', pushLimiter, identifyRequester, pushRouter);
 app.use('/api/webhooks/revenuecat', revenuecatWebhookRouter);
 // Protection multicompte (Cross-Account Protection / RISC) — voir
 // RISC_SETUP.md pour l'enregistrement de cette URL auprès de Google.
@@ -71,4 +90,9 @@ const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
   console.log(`✅ ÉcoMiam backend démarré sur le port ${PORT}`);
   ensureRecipeImageBucket().catch(() => {});
+  // ⚡ NOUVEAU : rappel email "essai/abonnement se termine dans 2 jours" —
+  // ce process Express tourne en continu (pas de serverless ici), donc un
+  // simple setInterval suffit, pas besoin d'infra de cron externe.
+  startSubscriptionReminderJob();
+  startRetentionJobs();
 });
