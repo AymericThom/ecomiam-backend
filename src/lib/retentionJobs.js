@@ -7,6 +7,16 @@ import { grantPromotionalDays } from './revenuecatAdmin.js';
 // lib/subscriptionReminders.js (ce process Express tourne en continu, pas
 // besoin d'infra cron externe). Prérequis : la migration SQL décrite dans
 // docs/REFERRAL_RETENTION_SETUP.md.
+//
+// ⚠️ IMPORTANT : `current_streak` / `longest_streak` NE sont PAS gérés ici —
+// ce sont les colonnes déjà écrites directement par le mobile à chaque plat
+// cuisiné (voir registerCookedMeal dans mobile/src/screens/AppContent.js).
+// C'est volontaire et même préférable : ça veut dire que la récompense de
+// parrainage se déclenche sur une vraie preuve d'usage (le filleul a
+// vraiment cuisiné 2 jours de suite), pas sur un simple "a rouvert l'app".
+// `last_active_date`, lui, EST nouveau et mis à jour par ce même bloc côté
+// mobile (même `.update()`, un champ en plus) — voir docs/REFERRAL_RETENTION_SETUP.md
+// section "Mobile" pour le diff exact à appliquer.
 
 const CHECK_INTERVAL_MS = 60 * 60 * 1000; // toutes les heures
 const REFERRER_CONFIRMED_DAYS = 14; // récompense du PARRAIN, une fois le filleul confirmé actif

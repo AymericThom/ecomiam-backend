@@ -14,8 +14,6 @@ import { contactRouter } from './routes/contact.js';
 import { revenuecatWebhookRouter } from './routes/revenuecatWebhook.js';
 import { riscEventsRouter } from './routes/riscEvents.js';
 import { referralRouter } from './routes/referral.js';
-import { streakRouter } from './routes/streak.js';
-import { pushRouter } from './routes/push.js';
 import { identifyRequester } from './middleware/requireAuth.js';
 import { checkDailyQuota } from './middleware/checkDailyQuota.js';
 import { ensureRecipeImageBucket } from './lib/imageGen.js';
@@ -57,11 +55,8 @@ const accountLimiter = rateLimit({ windowMs: 60 * 60 * 1000, max: 5 }); // suppr
 // généreux mais borné, pour laisser réessayer en cas d'erreur réseau sans
 // ouvrir la porte au spam d'emails vers la boîte support.
 const contactLimiter = rateLimit({ windowMs: 60 * 60 * 1000, max: 8 });
-// ⚡ NOUVEAU : parrainage (lecture/validation de code, rare par nature) et
-// streak (lecture seule, peut être appelée souvent à l'ouverture de l'app).
+// ⚡ NOUVEAU : parrainage (lecture/validation de code, rare par nature).
 const referralLimiter = rateLimit({ windowMs: 60 * 60 * 1000, max: 20 });
-const streakLimiter = rateLimit({ windowMs: 15 * 60 * 1000, max: 60 });
-const pushLimiter = rateLimit({ windowMs: 60 * 60 * 1000, max: 10 });
 
 app.get('/health', (_req, res) => res.json({ ok: true, uptime: process.uptime() }));
 
@@ -71,8 +66,6 @@ app.use('/api/cart', cartLimiter, identifyRequester, cartRouter);
 app.use('/api/account', accountLimiter, identifyRequester, accountRouter);
 app.use('/api/contact', contactLimiter, identifyRequester, contactRouter);
 app.use('/api/referral', referralLimiter, identifyRequester, referralRouter);
-app.use('/api/streak', streakLimiter, identifyRequester, streakRouter);
-app.use('/api/push', pushLimiter, identifyRequester, pushRouter);
 app.use('/api/webhooks/revenuecat', revenuecatWebhookRouter);
 // Protection multicompte (Cross-Account Protection / RISC) — voir
 // RISC_SETUP.md pour l'enregistrement de cette URL auprès de Google.

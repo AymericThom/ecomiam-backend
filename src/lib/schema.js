@@ -33,10 +33,18 @@ export const RecipeSchema = z.object({
   totalTime: z.number().positive(),
   servings: z.number().positive(),
   difficulty: z.enum(['Facile', 'Moyen', 'Difficile']),
-  calories: z.number().nonnegative(),
-  protein: z.number().nonnegative(),
-  carbs: z.number().nonnegative(),
-  fat: z.number().nonnegative(),
+  // ⚡ NOUVEAU : bornes réalistes par PORTION (pas juste "nonnegative").
+  // Avant, seuls les objectifs weight_loss/muscle plafonnaient quoi que ce
+  // soit (voir RecipeSchemaForRequest) — pour "découverte"/"économies"/sans
+  // objectif, un modèle pouvait renvoyer 3000 kcal ou 200g de protéines
+  // pour UNE portion et passer la validation tant que l'arithmétique
+  // 4/4/9 restait cohérente (voir le refine plus bas). Ces plages couvrent
+  // très large, d'une salade légère à un plat familial copieux, sans
+  // laisser passer une valeur qui n'a plus rien de réaliste pour un repas.
+  calories: z.number().min(120).max(1100),
+  protein: z.number().min(2).max(75),
+  carbs: z.number().min(2).max(150),
+  fat: z.number().min(1).max(70),
   equipment: z.array(z.string()).default([]),
   // Une "vraie" recette a un minimum d'ingrédients et d'étapes. min(1) laissait
   // passer des recettes creuses (1 ingrédient, 1 étape) — c'était la cause

@@ -13,10 +13,21 @@
 
 // Prix moyen pour 100g (ingrédients au poids)
 const PRICE_PER_100G = [
-  { match: /boeuf|bœuf|steak haché|bavette|entrecôte/i, price: 1.7 },
+  // 🐛 CORRIGÉ : "bœuf" regroupait steak haché (bas de gamme, ~1€/100g) et
+  // bavette/entrecôte (pièces nobles, ~2,8-3,5€/100g) sous UN SEUL prix
+  // moyen (1,7€/100g) — ni juste pour l'un ni pour l'autre. Séparé en deux
+  // paliers réalistes.
+  { match: /steak haché|bœuf haché|boeuf haché|haché de bœuf|haché de boeuf/i, price: 1.15 },
+  { match: /bavette|entrecôte|faux-filet|rumsteck|onglet/i, price: 3.1 },
+  { match: /boeuf|bœuf|steak(?! haché)/i, price: 1.9 },
   { match: /poulet|dinde|volaille/i, price: 1.05 },
   { match: /porc|jambon|lardons|bacon/i, price: 0.95 },
-  { match: /saumon|poisson frais|cabillaud|colin/i, price: 1.9 },
+  // 🐛 CORRIGÉ : même souci pour le poisson — un filet de saumon frais
+  // coûte nettement plus cher (~2,3-2,8€/100g) qu'un poisson blanc standard
+  // (cabillaud/colin, ~1,9-2,2€/100g) ; les regrouper sous 1,9€/100g
+  // sous-estimait le saumon.
+  { match: /saumon/i, price: 2.5 },
+  { match: /poisson frais|cabillaud|colin|truite/i, price: 1.95 },
   { match: /thon en boîte|thon au naturel|maquereau/i, price: 0.9 },
   { match: /crevette/i, price: 1.75 },
   { match: /fromage|emmental|comté|chèvre|feta|parmesan|mozzarella/i, price: 1.3 },

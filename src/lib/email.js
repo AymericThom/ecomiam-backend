@@ -18,7 +18,7 @@
 // reste de la fonctionnalité (formulaire de contact, etc.) reste testable
 // sans compte Resend.
 
-export async function sendEmail({ to, subject, text, replyTo }) {
+export async function sendEmail({ to, subject, text, replyTo, cc }) {
   const apiKey = process.env.RESEND_API_KEY;
   const from = process.env.RESEND_FROM_EMAIL || 'Kaba <support@kaba-app.fr>';
 
@@ -26,7 +26,7 @@ export async function sendEmail({ to, subject, text, replyTo }) {
     console.warn(
       '[email] RESEND_API_KEY manquante — email NON envoyé (mode simulé). Voir lib/email.js pour la config.',
     );
-    console.log('[email:simulé]', { to, subject, replyTo, text });
+    console.log('[email:simulé]', { to, subject, replyTo, cc, text });
     return { simulated: true };
   }
 
@@ -42,6 +42,11 @@ export async function sendEmail({ to, subject, text, replyTo }) {
       subject,
       text,
       ...(replyTo ? { reply_to: replyTo } : {}),
+      // ⚡ NOUVEAU : copie à l'expéditeur (voir routes/contact.js) — pour
+      // qu'il garde une trace de son propre message, comme un accusé de
+      // réception. Resend accepte `cc` en chaîne ou tableau, on tolère les
+      // deux ici pour rester simple à appeler.
+      ...(cc ? { cc: Array.isArray(cc) ? cc : [cc] } : {}),
     }),
   });
 

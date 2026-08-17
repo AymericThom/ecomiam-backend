@@ -49,6 +49,11 @@ contactRouter.post('/', async (req, res) => {
         cleanMessage,
       ].join('\n'),
       replyTo: replyToEmail || undefined,
+      // ⚡ NOUVEAU : la personne qui écrit reçoit une copie de son propre
+      // message — utile comme accusé de réception ("mon message est bien
+      // parti") et comme trace si elle doit relancer plus tard. Seulement
+      // si elle a fourni une adresse (le champ reste facultatif).
+      cc: replyToEmail || undefined,
     });
 
     res.json({ ok: true });

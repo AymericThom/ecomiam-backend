@@ -31,7 +31,9 @@ function pickDuration(days) {
 // passé à RevenueCat côté mobile lors du login — voir docs/SETUP.md).
 export async function grantPromotionalDays(appUserId, days) {
   const apiKey = process.env.REVENUECAT_SECRET_KEY;
-  const entitlementId = process.env.REVENUECAT_ENTITLEMENT_ID || 'premium';
+  // "pro" = même identifiant que celui vérifié côté mobile dans
+  // src/payments/purchases.js (customerInfo.entitlements.active.pro).
+  const entitlementId = process.env.REVENUECAT_ENTITLEMENT_ID || 'pro';
 
   if (!apiKey) {
     console.warn(
