@@ -15,6 +15,19 @@ import { supabaseAdmin } from '../lib/supabaseAdmin.js';
 
 export const revenuecatWebhookRouter = Router();
 
+// ⚠️ MIGRATION SQL SUPPLÉMENTAIRE REQUISE pour le plan famille (voir plus
+// bas) :
+//
+//   ALTER TABLE profiles
+//     ADD COLUMN IF NOT EXISTS pro_source text DEFAULT 'own';
+//     -- 'own' = a payé son propre abonnement (ou n'est pas PRO)
+//     -- 'family' = reçoit le PRO via le plan famille d'un autre membre
+//
+// Identifiant du produit RevenueCat correspondant au plan "Famille" (celui
+// à 59,99€ affiché dans le paywall) — DOIT correspondre exactement à
+// l'identifiant configuré dans RevenueCat > Products.
+const FAMILY_PRODUCT_ID = process.env.REVENUECAT_FAMILY_PRODUCT_ID || 'kaba_family_annual';
+
 // RevenueCat > Project Settings > Integrations > Webhooks
 // URL à configurer : https://TON-BACKEND.com/api/webhooks/revenuecat
 // Authorization header à configurer côté RevenueCat : "Bearer <REVENUECAT_WEBHOOK_SECRET>"
@@ -74,6 +87,7 @@ revenuecatWebhookRouter.post('/', async (req, res) => {
           .from('profiles')
           .update({
             is_pro: true,
+            pro_source: 'own', // toujours "own" pour l'acheteur, même sur le plan famille
             subscription_expires_at: expiresAt,
             is_trial: isTrial,
             // Nouveau cycle (achat/renouvellement) → on réautorise l'envoi
@@ -81,15 +95,64 @@ revenuecatWebhookRouter.post('/', async (req, res) => {
             reminder_2d_sent_at: null,
           })
           .eq('id', userId);
+
+        // ⚡ NOUVEAU : le plan famille n'accordait le PRO qu'à l'acheteur —
+        // les autres membres de son groupe famille ne recevaient jamais
+        // rien, alors que c'est tout l'intérêt du plan. On propage
+        // maintenant le PRO à tout le groupe quand le produit acheté est
+        // bien le plan famille.
+        const isFamilyProduct = event.product_id === FAMILY_PRODUCT_ID;
+        if (isFamilyProduct) {
+          const { data: buyer } = await supabaseAdmin
+            .from('profiles')
+            .select('family_group_id')
+            .eq('id', userId)
+            .single();
+          if (buyer?.family_group_id) {
+            // On ne touche PAS aux membres qui ont déjà leur propre
+            // abonnement ('own') — pas question de leur faire perdre leur
+            // date d'expiration à eux au profit de celle du plan famille.
+            await supabaseAdmin
+              .from('profiles')
+              .update({
+                is_pro: true,
+                pro_source: 'family',
+                subscription_expires_at: expiresAt,
+                is_trial: isTrial,
+                reminder_2d_sent_at: null,
+              })
+              .eq('family_group_id', buyer.family_group_id)
+              .neq('id', userId)
+              .neq('pro_source', 'own');
+          }
+        }
       } else if (INACTIVE_EVENTS.has(type)) {
         await supabaseAdmin
           .from('profiles')
           .update({
             is_pro: false,
+            pro_source: 'own',
             subscription_expires_at: null,
             is_trial: false,
           })
           .eq('id', userId);
+
+        // ⚡ NOUVEAU : symétrique de l'octroi ci-dessus — si l'abonnement
+        // famille qui expire est celui qui avait été partagé, on retire le
+        // PRO aux membres qui l'avaient reçu PAR ce biais (jamais à ceux
+        // qui ont leur propre abonnement, `pro_source` les protège déjà).
+        const { data: buyer } = await supabaseAdmin
+          .from('profiles')
+          .select('family_group_id')
+          .eq('id', userId)
+          .single();
+        if (buyer?.family_group_id) {
+          await supabaseAdmin
+            .from('profiles')
+            .update({ is_pro: false, pro_source: 'own', subscription_expires_at: null, is_trial: false })
+            .eq('family_group_id', buyer.family_group_id)
+            .eq('pro_source', 'family');
+        }
       } else if (type === 'TRANSFER') {
         // Un transfert déplace l'entitlement vers ce app_user_id — on lui
         // accorde le PRO ici. On ne peut pas révoquer le compte source à

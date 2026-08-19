@@ -22,12 +22,31 @@ export async function isPremiumRequest(req) {
 
     const { data: profile, error: profileError } = await supabaseAdmin
       .from('profiles')
-      .select('is_pro')
+      .select('is_pro, family_group_id')
       .eq('id', userData.user.id)
       .single();
     if (profileError) return false;
+    if (profile?.is_pro) return true;
 
-    return !!profile?.is_pro;
+    // ⚡ NOUVEAU : filet de sécurité pour le plan famille — si la personne a
+    // rejoint le groupe APRÈS l'achat (le webhook ne propage le PRO qu'au
+    // moment de l'achat/renouvellement, voir routes/revenuecatWebhook.js),
+    // son propre is_pro peut être encore à false alors que son groupe a
+    // bien un abonnement famille actif. Vérifié en direct ici plutôt que
+    // de dépendre uniquement du timing du webhook.
+    if (profile?.family_group_id) {
+      const { data: familyPro } = await supabaseAdmin
+        .from('profiles')
+        .select('id')
+        .eq('family_group_id', profile.family_group_id)
+        .eq('is_pro', true)
+        .eq('pro_source', 'own')
+        .limit(1)
+        .maybeSingle();
+      if (familyPro) return true;
+    }
+
+    return false;
   } catch {
     return false;
   }
