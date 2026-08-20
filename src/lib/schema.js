@@ -105,7 +105,10 @@ export function WeekResponseSchema(count = 7, userState = {}) {
 export function FridgeResponseSchema(userState = {}) {
   return z.object({
     detectedItems: z.array(z.string()),
-    recipe: RecipeSchemaForRequest(userState),
+    // ⚡ NOUVEAU : nullable — si aucun aliment n'est détecté sur la photo,
+    // le modèle ne doit plus être forcé d'inventer une recette quand même
+    // (voir prompts.js > buildFridgePrompt, règle 2).
+    recipe: RecipeSchemaForRequest(userState).nullable(),
   });
 }
 

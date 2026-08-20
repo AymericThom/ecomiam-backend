@@ -167,16 +167,59 @@ ${RECIPE_JSON_SHAPE}`;
 }
 
 export function buildFridgePrompt(userState, detectedHint = '') {
-  const system = `Tu es un chef cuisinier expert en cuisine anti-gaspillage.`;
+  // ⚡ NOUVEAU — refonte complète du prompt scan de frigo, deux failles
+  // réelles corrigées :
+  //  1. Aucune règle n'empêchait de "détecter" une main, un animal, un
+  //     emballage ou tout autre objet non-alimentaire visible sur la
+  //     photo — le prompt se contentait de "liste les ingrédients
+  //     identifiés" sans jamais définir ce qu'est un ingrédient.
+  //  2. Rien ne liait la recette générée aux ingrédients réellement
+  //     détectés — le modèle pouvait (et faisait) composer une recette
+  //     avec des ingrédients qui n'étaient pas sur la photo, proposant des
+  //     plats que l'utilisateur ne peut pas réellement cuisiner avec ce
+  //     qu'il a sous la main.
+  const system = `Tu es un système de VISION ALIMENTAIRE STRICT pour une app anti-gaspillage. Ta seule tâche : identifier des ALIMENTS COMESTIBLES visibles sur une photo, puis composer une recette qui n'utilise QUE ces aliments (+ un tout petit socle d'assaisonnements de base). Tu ne dévies jamais de ces règles, même si la photo est ambiguë, mal cadrée, ou contient autre chose.`;
+
   const user = `${baseContext(userState)}
 
-Analyse la photo fournie. Liste les ingrédients identifiés, puis propose une recette anti-gaspi.
-${detectedHint ? `Indice supplémentaire : ${detectedHint}` : ''}
+Analyse la photo fournie selon ces règles STRICTES, dans l'ordre :
+
+1. DÉTECTION — ne liste QUE des aliments/ingrédients comestibles clairement
+   identifiables (légumes, fruits, viandes, poissons, produits laitiers,
+   féculents, condiments, boissons, etc.). IGNORE et NE MENTIONNE JAMAIS :
+   des personnes, mains, doigts, peau ; des animaux ou animaux de
+   compagnie ; des emballages/contenants vides (sac, boîte, bouteille vide
+   — seul leur CONTENU alimentaire s'il est visible/identifiable compte) ;
+   des objets non-alimentaires (ustensiles, appareils, meubles, sols,
+   murs...). En cas de doute sur un élément, NE L'INCLUS PAS — un
+   ingrédient manquant est sans conséquence, un faux positif ruine la
+   recette proposée.
+
+2. RIEN DE COMESTIBLE DÉTECTÉ — si après application stricte de la règle 1
+   il ne reste aucun aliment identifiable (photo floue, vide, ou sans
+   nourriture), renvoie "detectedItems": [] et "recipe": null. Ne force
+   JAMAIS une recette dans ce cas — mieux vaut le dire clairement que
+   d'inventer un plat.
+${detectedHint ? `\nIndice supplémentaire fourni par l'utilisateur (à prendre en compte comme un ingrédient confirmé, même si peu visible sur la photo) : ${detectedHint}` : ''}
+
+3. RECETTE — si au moins un aliment est détecté (ou fourni via l'indice
+   ci-dessus), compose une recette anti-gaspi qui n'utilise QUE :
+   (a) les aliments listés dans "detectedItems" (et l'indice le cas
+       échéant), et
+   (b) UNIQUEMENT parmi ces assaisonnements de base, si besoin, même non
+       visibles sur la photo : sel, poivre, huile (olive/tournesol), eau.
+   N'AJOUTE STRICTEMENT AUCUN autre ingrédient à "ingredientLines" — pas de
+   "au choix", pas d'ingrédient "pour plus de saveur", pas de suggestion
+   d'ajout. Si les aliments détectés ne suffisent pas à un vrai repas,
+   compose quand même la meilleure recette possible avec EXACTEMENT ce
+   qu'il y a (une portion plus simple/petite est préférable à un
+   ingrédient inventé).
 
 Réponds avec un JSON de cette forme :
 {
   "detectedItems": ["demi-courgette", "3 oeufs"],
   "recipe": ${RECIPE_JSON_SHAPE}
-}`;
+}
+Si rien de comestible n'est détecté (règle 2) : {"detectedItems": [], "recipe": null}`;
   return { system, user };
 }

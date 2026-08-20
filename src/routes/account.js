@@ -34,6 +34,53 @@ accountRouter.get('/export', requireAccountAuth, async (req, res) => {
       safeQuery('family_groups', (q) => q.select('id, name, created_at').eq('owner_id', userId)),
     ]);
 
+    // ⚡ NOUVEAU : le groupe famille dont on est MEMBRE (pas seulement celui
+    // qu'on a créé) manquait — on ne voyait que la moitié du lien famille.
+    const familyGroupMember = profile?.family_group_id
+      ? await safeQuery('family_groups', (q) =>
+          q.select('id, name, created_at, owner_id').eq('id', profile.family_group_id).single(),
+        )
+      : null;
+
+    // ⚡ NOUVEAU : le JSON complet (profil brut avec tout le household en
+    // JSONB imbriqué) est exhaustif mais peu lisible tel quel — un résumé à
+    // plat en tête d'export rend visible d'un coup d'œil ce que Kaba sait
+    // réellement, plutôt que de devoir fouiller dans la structure imbriquée
+    // pour s'en rendre compte.
+    const household = profile?.household || {};
+    const resume = {
+      pseudo: household.displayName || null,
+      budget_hebdo: household.budget ?? null,
+      devise: household.currency || null,
+      regime: household.diet || null,
+      allergies: household.allergies || [],
+      aliments_evites: household.dislikedIngredients || [],
+      aliments_preferes: household.lovedIngredients || [],
+      equipement_cuisine: household.equipment || [],
+      statut_abonnement: profile
+        ? {
+            pro: !!profile.is_pro,
+            origine: profile.pro_source || 'own',
+            expire_le: profile.subscription_expires_at || null,
+            periode_essai: !!profile.is_trial,
+          }
+        : null,
+      gamification: profile
+        ? {
+            xp_total: profile.xp || 0,
+            serie_actuelle: profile.current_streak || 0,
+            meilleure_serie: profile.longest_streak || 0,
+          }
+        : null,
+      parrainage: profile
+        ? {
+            mon_code: profile.referral_code || null,
+            parrainé_par: profile.referred_by || null,
+            filleuls_confirmés: profile.referral_confirmed_count || 0,
+          }
+        : null,
+    };
+
     res.setHeader('Content-Disposition', 'attachment; filename="kaba-mes-donnees.json"');
     res.json({
       export_genere_le: new Date().toISOString(),
@@ -42,11 +89,13 @@ accountRouter.get('/export', requireAccountAuth, async (req, res) => {
         email: authUser?.user?.email || null,
         cree_le: authUser?.user?.created_at || null,
       },
-      profil: profile || null,
+      resume,
+      profil_complet: profile || null,
       tokens_notifications: pushTokens || [],
       panier: cartItems || [],
       historique_recettes: recipesHistory || [],
-      groupes_famille_crees: familyGroupOwned || [],
+      groupe_famille_cree: familyGroupOwned || [],
+      groupe_famille_membre: familyGroupMember || null,
     });
   } catch (err) {
     console.error('[account/export]', err);
