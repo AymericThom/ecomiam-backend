@@ -19,12 +19,20 @@ import { grantPromotionalDays } from './revenuecatAdmin.js';
 // section "Mobile" pour le diff exact à appliquer.
 
 const CHECK_INTERVAL_MS = 60 * 60 * 1000; // toutes les heures
-const REFERRER_CONFIRMED_DAYS = 14; // récompense du PARRAIN, une fois le filleul confirmé actif
 // Paliers de filleuls CONFIRMÉS (pas juste inscrits) → bonus PRO cumulés
 // pour le parrain. Volontairement croissant : plus tu ramènes de gens qui
 // restent, plus le prochain palier est généreux, pour donner une raison de
 // continuer à inviter au-delà du premier ami.
-const MILESTONE_BONUS_DAYS = { 3: 30, 5: 60, 10: 180 };
+// 🐛 CORRIGÉ (nouvelle demande) : 4 paliers désormais — 1 / 3 / 5 / 10
+// filleuls confirmés (avant : 3 / 5 / 10, donc rien avant le 3e ami). Jours
+// de bonus par palier pas précisés par la demande : gardés en progression
+// douce (15 / 30 / 60 / 180) en cohérence avec les valeurs déjà en place
+// pour 5 et 10.
+// 🐛 CORRIGÉ (nouvelle demande) : suppression de la récompense fixe de 14j
+// versée à CHAQUE filleul confirmé, en plus des paliers — elle rendait le
+// premier ami déjà très rentable et n'incitait pas à en inviter plusieurs.
+// Seuls les paliers ci-dessous récompensent désormais le parrain.
+const MILESTONE_BONUS_DAYS = { 1: 15, 3: 30, 5: 60, 10: 180 };
 
 // --- 1. Récompense DIFFÉRÉE du parrain -------------------------------------
 // Un filleul qui atteint current_streak >= 2 (= revenu un 2e jour de suite,
@@ -50,8 +58,6 @@ async function checkReferralConfirmations() {
 
   for (const referred of confirmedReferrals) {
     try {
-      await grantPromotionalDays(referred.referred_by, REFERRER_CONFIRMED_DAYS);
-
       const { data: referrer } = await supabaseAdmin
         .from('profiles')
         .select('referral_confirmed_count')
@@ -72,9 +78,16 @@ async function checkReferralConfirmations() {
           body: `${newCount} amis fidèles grâce à toi — ${MILESTONE_BONUS_DAYS[newCount]} jours PRO offerts en bonus.`,
         });
       } else {
+        // 🐛 CORRIGÉ (nouvelle demande) : plus de récompense hors palier —
+        // ce filleul confirmé compte pour le prochain palier, mais on ne
+        // notifie plus d'un cadeau immédiat ; le push encourage plutôt à
+        // continuer vers le palier suivant.
+        const nextMilestone = [1, 3, 5, 10].find((m) => m > newCount);
         await sendPushToUser(supabaseAdmin, referred.referred_by, {
-          title: '🎁 Ton ami est resté !',
-          body: `${REFERRER_CONFIRMED_DAYS} jours PRO offerts pour te remercier de l'avoir invité.`,
+          title: '🎉 Ton ami est resté !',
+          body: nextMilestone
+            ? `${newCount} amis fidèles grâce à toi. Encore ${nextMilestone - newCount} pour débloquer ton prochain bonus PRO.`
+            : `${newCount} amis fidèles grâce à toi !`,
         });
       }
     } catch (err) {

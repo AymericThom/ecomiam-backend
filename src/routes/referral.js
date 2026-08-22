@@ -30,7 +30,10 @@ referralRouter.get('/me', requireAuth, async (req, res) => {
       .eq('id', req.user.id)
       .single();
 
-    const milestones = [3, 5, 10];
+    // 🐛 CORRIGÉ (nouvelle demande) : doit rester synchronisé avec
+    // MILESTONE_BONUS_DAYS dans lib/retentionJobs.js (même paliers, même
+    // ordre) — palier à 1 filleul ajouté avant le 3.
+    const milestones = [1, 3, 5, 10];
     const confirmedCount = profile?.referral_confirmed_count || 0;
     const nextMilestone = milestones.find((m) => m > confirmedCount) || null;
 
